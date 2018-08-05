@@ -20,7 +20,7 @@ export declare enum WSClientError {
     MaxRequest = "MaxRequest",
 }
 export default class WSClient {
-    protected _ws: WebSocket;
+    protected _ws: WebSocket | any;
     protected _times: number;
     protected _wsurl: string;
     protected _id: number;
@@ -39,7 +39,7 @@ export default class WSClient {
         [index: string]: (data: any) => Promise<any>;
     };
     protected _waiting: RPC[];
-    protected interval: number;
+    protected interval: any;
     constructor(wsurl: string, address?: string);
     protected createws(): void;
     protected onopen(): void;

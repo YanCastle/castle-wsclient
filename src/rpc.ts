@@ -1,9 +1,17 @@
-import { Buffer } from 'buffer'
+// import { Buffer } from 'buffer'
+// export function b2u(buffer: any): any {
+//     // var ab = new ArrayBuffer(buffer.length);
+//     var view = new Uint8Array(buffer.size);
+//     for (var i = 0; i < buffer.size; ++i) {
+//         view[i] = buffer[i];
+//     }
+//     return view;
+// }
 export class RPC {
     //来源 8 字节
-    From: string = "00000000";
+    From: string | any = "00000000";
     //接收方 8 字节
-    To: string = "00000000";
+    To: string | any = "00000000";
     //是否需要回复，若不需要回复这不创建Promise，否则创建Promise并控制超时逻辑
     NeedReply: boolean = true;
     //响应状态，成功、失败
@@ -15,7 +23,7 @@ export class RPC {
     //请求路径，长度不得超过32
     Path: string = ''
     //请求类型
-    Type: RPCType
+    Type: RPCType = RPCType.Heart
     //数据内容
     Data: Object | string | Buffer = ''
     //消息时间
@@ -56,13 +64,14 @@ export class RPC {
         data = data.toString()
         return Buffer.concat([
             b,
-            Buffer.alloc(8, From, 'ascii'),
-            Buffer.alloc(8, To, 'ascii'),
-            Buffer.alloc(this.Path.length, this.Path),
-            Buffer.alloc(data.length, data)
+            Buffer.from(From),
+            Buffer.from(To),
+            Buffer.from(this.Path),
+            Buffer.from(data)
         ])
     }
     static decode(b: Buffer) {
+
         let t = new RPC()
         t.NeedReply = (b[0] & 0x80) == 0x80
         t.Status = (b[0] & 0x40) == 0x40
@@ -82,8 +91,8 @@ export class RPC {
         }
 
         t.Time = Number(tTime.join(''))
-        t.From = b.slice(18, 18 + 6).toString('ascii').trim()
-        t.To = b.slice(18 + 6, 18 + 6 + 6).toString('ascii').trim()
+        t.From = b.slice(18, 18 + 6).toString().trim()
+        t.To = b.slice(18 + 6, 18 + 6 + 6).toString().trim()
         //预留7个字节不处理
         t.Path = b.slice(34, len + 34).toString()
         t.Data = b.slice(34 + len)
@@ -131,7 +140,7 @@ export enum DataType {
     Number,
     String,
 }
-export function getDataType(data): DataType {
+export function getDataType(data: any): DataType {
     if (data instanceof Buffer) {
         return DataType.Buffer
     } else if ('number' == typeof data) {

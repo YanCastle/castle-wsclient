@@ -1,4 +1,5 @@
 import { RPC, RPCType } from './rpc';
+// import { Buffer } from 'buffer'
 export enum WSClientEvent {
     ReceiveStringError,
     DeocdeError,
@@ -20,7 +21,7 @@ export enum WSClientError {
     MaxRequest = 'MaxRequest'
 }
 export default class WSClient {
-    protected _ws: WebSocket;
+    protected _ws: WebSocket | any;
     protected _times: number = 0;
     protected _wsurl: string = "";
     protected _id: number = 0;
@@ -32,7 +33,7 @@ export default class WSClient {
     protected _services: { [index: string]: (data: any) => Promise<any> } = {}
     protected _push: { [index: string]: (data: any) => Promise<any> } = {}
     protected _waiting: RPC[] = [];
-    protected interval: number = 0;
+    protected interval: any = 0;
     /**
      * 构造函数
      * @param wsurl 
@@ -61,6 +62,7 @@ export default class WSClient {
      */
     protected createws() {
         this._ws = new WebSocket(this._wsurl)
+        this._ws.binaryType = 'arraybuffer'
         this._ws.onerror = (evt: any) => {
             this.dispatch(WSClientEvent.WebSocketError, evt)
             setTimeout(() => {
@@ -79,8 +81,9 @@ export default class WSClient {
             this.onopen()
         }
         this._ws.onmessage = (evt: any) => {
-            this.dispatch(WSClientEvent.WebSocketMessage, evt.data)
-            this.message(evt.data)
+            let data = new Buffer(evt.data)
+            this.dispatch(WSClientEvent.WebSocketMessage, data)
+            this.message(data)
         }
     }
     /**
@@ -90,7 +93,9 @@ export default class WSClient {
         //处理待发送数据        
         this.dispatch(WSClientEvent.WebSocketConnected, {})
         for (let i = 0; i < this._waiting.length; i++) {
-            this.send(this._waiting.shift())
+            let rpc: RPC | any = this._waiting.shift();
+            if (rpc)
+                this.send(rpc)
         }
     }
     /**
@@ -138,13 +143,13 @@ export default class WSClient {
         r.To = this._server_address;
         r.Type = RPCType.Request;
         r.Time = Date.now()
-        if (options.Timeout > 0) {
-            r.Timeout = options.Timeout
+        if (options.Timeout && options.Timeout > 0) {
+            r.Timeout = Number(options.Timeout)
             setTimeout(() => {
                 this.reject(r.ID, new Error(WSClientError.Timeout))
             }, options.Timeout)
         }
-        if (options.NeedReply === true) {
+        if (options.NeedReply === true || options.NeedReply === undefined) {
             r.NeedReply = true;
             return new Promise((resolve, reject) => {
                 this.send(r)
@@ -209,7 +214,7 @@ export default class WSClient {
      * 接收数据回调
      * @param data 
      */
-    protected message(data) {
+    protected message(data: any) {
         if ('string' == typeof data) {
 
         } else {
@@ -280,7 +285,7 @@ export default class WSClient {
                     this.createws()
                 }
             } catch (error) {
-
+                console.log(error)
             }
         }
     }
@@ -289,7 +294,7 @@ export default class WSClient {
      * @param event 
      * @param data 
      */
-    protected dispatch(event: WSClientEvent, data) {
+    protected dispatch(event: WSClientEvent, data: any) {
         if (this._event[event]) {
             this._event[event].forEach((cb: Function) => {
                 cb(data)

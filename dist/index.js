@@ -50,6 +50,7 @@ class WSClient {
     }
     createws() {
         this._ws = new WebSocket(this._wsurl);
+        this._ws.binaryType = 'arraybuffer';
         this._ws.onerror = (evt) => {
             this.dispatch(WSClientEvent.WebSocketError, evt);
             setTimeout(() => {
@@ -68,14 +69,17 @@ class WSClient {
             this.onopen();
         };
         this._ws.onmessage = (evt) => {
-            this.dispatch(WSClientEvent.WebSocketMessage, evt.data);
-            this.message(evt.data);
+            let data = new Buffer(evt.data);
+            this.dispatch(WSClientEvent.WebSocketMessage, data);
+            this.message(data);
         };
     }
     onopen() {
         this.dispatch(WSClientEvent.WebSocketConnected, {});
         for (let i = 0; i < this._waiting.length; i++) {
-            this.send(this._waiting.shift());
+            let rpc = this._waiting.shift();
+            if (rpc)
+                this.send(rpc);
         }
     }
     async regist(ServiceName, cb) {
@@ -99,13 +103,13 @@ class WSClient {
         r.To = this._server_address;
         r.Type = rpc_1.RPCType.Request;
         r.Time = Date.now();
-        if (options.Timeout > 0) {
-            r.Timeout = options.Timeout;
+        if (options.Timeout && options.Timeout > 0) {
+            r.Timeout = Number(options.Timeout);
             setTimeout(() => {
                 this.reject(r.ID, new Error(WSClientError.Timeout));
             }, options.Timeout);
         }
-        if (options.NeedReply === true) {
+        if (options.NeedReply === true || options.NeedReply === undefined) {
             r.NeedReply = true;
             return new Promise((resolve, reject) => {
                 this.send(r);
@@ -224,6 +228,7 @@ class WSClient {
                 }
             }
             catch (error) {
+                console.log(error);
             }
         }
     }

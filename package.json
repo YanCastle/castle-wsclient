@@ -1,6 +1,6 @@
 {
   "name": "castle-wsclient",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "",
   "main": "dist/index.js",
   "files": [
@@ -25,7 +25,9 @@
   },
   "homepage": "https://github.com/YanCastle/castle-wsclient#readme",
   "dependencies": {
-    "buffer": "^5.2.0",
-    "websocket": "^1.0.26"
+    "buffer": "^3.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^10.5.6"
   }
 }

@@ -1,7 +1,7 @@
-import { Buffer } from 'buffer';
+/// <reference types="node" />
 export declare class RPC {
-    From: string;
-    To: string;
+    From: string | any;
+    To: string | any;
     NeedReply: boolean;
     Status: boolean;
     Timeout: number;

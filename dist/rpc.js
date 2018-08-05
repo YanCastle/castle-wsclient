@@ -1,6 +1,5 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const buffer_1 = require("buffer");
 class RPC {
     constructor() {
         this.From = "00000000";
@@ -10,6 +9,7 @@ class RPC {
         this.Timeout = 0;
         this.ID = 0;
         this.Path = '';
+        this.Type = RPCType.Heart;
         this.Data = '';
         this.Time = 0;
     }
@@ -19,7 +19,7 @@ class RPC {
         }
         let From = this.From.length > 8 ? this.From.substr(0, 8) : this.From.padEnd(8, ' ');
         let To = this.To.length > 8 ? this.To.substr(0, 8) : this.To.padEnd(8, ' ');
-        let b = buffer_1.Buffer.alloc(18);
+        let b = Buffer.alloc(18);
         b[0] |= this.NeedReply ? 0x80 : 0x00;
         b[0] |= this.Status ? 0x40 : 0x00;
         b[0] |= this.Timeout;
@@ -41,12 +41,12 @@ class RPC {
             data = data ? 1 : 0;
         }
         data = data.toString();
-        return buffer_1.Buffer.concat([
+        return Buffer.concat([
             b,
-            buffer_1.Buffer.alloc(8, From, 'ascii'),
-            buffer_1.Buffer.alloc(8, To, 'ascii'),
-            buffer_1.Buffer.alloc(this.Path.length, this.Path),
-            buffer_1.Buffer.alloc(data.length, data)
+            Buffer.from(From),
+            Buffer.from(To),
+            Buffer.from(this.Path),
+            Buffer.from(data)
         ]);
     }
     static decode(b) {
@@ -66,8 +66,8 @@ class RPC {
             tTime.push(b[i + 4]);
         }
         t.Time = Number(tTime.join(''));
-        t.From = b.slice(18, 18 + 6).toString('ascii').trim();
-        t.To = b.slice(18 + 6, 18 + 6 + 6).toString('ascii').trim();
+        t.From = b.slice(18, 18 + 6).toString().trim();
+        t.To = b.slice(18 + 6, 18 + 6 + 6).toString().trim();
         t.Path = b.slice(34, len + 34).toString();
         t.Data = b.slice(34 + len);
         switch (dt) {
@@ -113,7 +113,7 @@ var DataType;
     DataType[DataType["String"] = 4] = "String";
 })(DataType = exports.DataType || (exports.DataType = {}));
 function getDataType(data) {
-    if (data instanceof buffer_1.Buffer) {
+    if (data instanceof Buffer) {
         return DataType.Buffer;
     }
     else if ('number' == typeof data) {
