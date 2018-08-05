@@ -118,7 +118,8 @@ export enum RPCType {
     Move,
     //转发
     Proxy,
-
+    //心跳
+    Heart,
 }
 export enum TimeoutUnit {
     s, m
