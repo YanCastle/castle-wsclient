@@ -30,10 +30,23 @@ class WSClient {
         this._services = {};
         this._push = {};
         this._waiting = [];
+        this.interval = 0;
         this._event = {};
         this._wsurl = wsurl;
         this._address = address;
         this.createws();
+        let heart = new rpc_1.RPC();
+        heart.NeedReply = false;
+        heart.Path = 'heart';
+        heart.Data = '';
+        heart.From = this._address;
+        heart.To = this._server_address;
+        heart.Type = rpc_1.RPCType.Heart;
+        this.interval = setInterval(() => {
+            if (this._ws.readyState == WebSocket.OPEN) {
+                this.send(heart);
+            }
+        }, 240000);
     }
     createws() {
         this._ws = new WebSocket(this._wsurl);
@@ -226,6 +239,9 @@ class WSClient {
             this._event[event] = [];
         }
         this._event[event].push(cb);
+    }
+    destory() {
+        clearInterval(this.interval);
     }
 }
 exports.default = WSClient;

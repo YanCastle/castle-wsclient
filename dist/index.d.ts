@@ -39,6 +39,7 @@ export default class WSClient {
         [index: string]: (data: any) => Promise<any>;
     };
     protected _waiting: RPC[];
+    protected interval: number;
     constructor(wsurl: string, address?: string);
     protected createws(): void;
     protected onopen(): void;
@@ -57,4 +58,5 @@ export default class WSClient {
         [index: number]: Function[];
     };
     on(event: WSClientEvent, cb: Function): void;
+    destory(): void;
 }

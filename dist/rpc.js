@@ -97,6 +97,7 @@ var RPCType;
     RPCType[RPCType["Push"] = 2] = "Push";
     RPCType[RPCType["Move"] = 3] = "Move";
     RPCType[RPCType["Proxy"] = 4] = "Proxy";
+    RPCType[RPCType["Heart"] = 5] = "Heart";
 })(RPCType = exports.RPCType || (exports.RPCType = {}));
 var TimeoutUnit;
 (function (TimeoutUnit) {

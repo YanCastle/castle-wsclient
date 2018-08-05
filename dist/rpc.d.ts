@@ -19,6 +19,7 @@ export declare enum RPCType {
     Push = 2,
     Move = 3,
     Proxy = 4,
+    Heart = 5,
 }
 export declare enum TimeoutUnit {
     s = 0,
