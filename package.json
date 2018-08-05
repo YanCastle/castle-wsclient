@@ -1,0 +1,31 @@
+{
+  "name": "castle-wsclient",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/index.js",
+  "files": [
+    "dist/index.js",
+    "dist/index.d.ts",
+    "rpc.js",
+    "rpc.d.ts",
+    "README.md"
+  ],
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YanCastle/castle-wsclient.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/YanCastle/castle-wsclient/issues"
+  },
+  "homepage": "https://github.com/YanCastle/castle-wsclient#readme",
+  "dependencies": {
+    "buffer": "^5.2.0",
+    "websocket": "^1.0.26"
+  }
+}
