@@ -32,6 +32,7 @@ export default class WSClient {
     protected _services: { [index: string]: (data: any) => Promise<any> } = {}
     protected _push: { [index: string]: (data: any) => Promise<any> } = {}
     protected _waiting: RPC[] = [];
+    protected interval: number = 0;
     /**
      * 构造函数
      * @param wsurl 
@@ -41,6 +42,18 @@ export default class WSClient {
         this._wsurl = wsurl;
         this._address = address;
         this.createws();
+        let heart = new RPC()
+        heart.NeedReply = false;
+        heart.Path = 'heart'
+        heart.Data = ''
+        heart.From = this._address
+        heart.To = this._server_address
+        heart.Type = RPCType.Heart
+        this.interval = setInterval(() => {
+            if (this._ws.readyState == WebSocket.OPEN) {
+                this.send(heart)
+            }
+        }, 240000)
     }
 
     /**
@@ -297,5 +310,8 @@ export default class WSClient {
             this._event[event] = [];
         }
         this._event[event].push(cb)
+    }
+    destory() {
+        clearInterval(this.interval)
     }
 }
