@@ -30,7 +30,7 @@ export class RPC {
     Time: number = 0
     //响应状态，成功、失败
     encode() {
-        if (this.Path.length < 1 && this.Path.length > 31) {
+        if (this.Path.length > 31) {
             throw new Error('错误的请求路径')
         }
         let From = this.From.length > 8 ? this.From.substr(0, 8) : this.From.padEnd(8, ' ')
@@ -63,15 +63,18 @@ export class RPC {
         }
         data = data.toString()
         return Buffer.concat([
+            Buffer.from([0x68]),
             b,
             Buffer.from(From),
             Buffer.from(To),
             Buffer.from(this.Path),
-            Buffer.from(data)
+            Buffer.from(data),
+            Buffer.from([0x68]),
         ])
     }
     static decode(b: Buffer) {
-
+        if (b[0] !== 0x68 || b[b.length - 1] !== 0x68) { throw 'ErrorPacket' }
+        b = b.slice(1, b.length - 1)
         let t = new RPC()
         t.NeedReply = (b[0] & 0x80) == 0x80
         t.Status = (b[0] & 0x40) == 0x40
@@ -129,6 +132,8 @@ export enum RPCType {
     Proxy,
     //心跳
     Heart,
+    //登陆
+    Login,
 }
 export enum TimeoutUnit {
     s, m

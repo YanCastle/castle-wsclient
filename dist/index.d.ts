@@ -42,6 +42,7 @@ export default class WSClient {
     protected interval: any;
     constructor(wsurl: string, address?: string);
     protected createws(): void;
+    protected login(): void;
     protected onopen(): void;
     regist(ServiceName: string, cb: (data: any) => Promise<any>): Promise<void>;
     unregist(ServiceName: string): Promise<void>;

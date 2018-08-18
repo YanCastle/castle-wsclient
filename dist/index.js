@@ -37,7 +37,7 @@ class WSClient {
         this.createws();
         let heart = new rpc_1.RPC();
         heart.NeedReply = false;
-        heart.Path = 'heart';
+        heart.Path = '';
         heart.Data = '';
         heart.From = this._address;
         heart.To = this._server_address;
@@ -74,13 +74,29 @@ class WSClient {
             this.message(data);
         };
     }
-    onopen() {
-        this.dispatch(WSClientEvent.WebSocketConnected, {});
-        for (let i = 0; i < this._waiting.length; i++) {
-            let rpc = this._waiting.shift();
-            if (rpc)
-                this.send(rpc);
+    login() {
+        if (this._ws.readyState == WebSocket.OPEN) {
+            let login = new rpc_1.RPC();
+            login.NeedReply = false;
+            login.Path = '';
+            login.Data = '';
+            login.From = this._address;
+            login.To = this._server_address;
+            login.Type = rpc_1.RPCType.Login;
+            this.send(login);
+            this.dispatch(WSClientEvent.WebSocketConnected, {});
+            for (let i = 0; i < this._waiting.length; i++) {
+                let rpc = this._waiting.shift();
+                if (rpc)
+                    this.send(rpc);
+            }
         }
+        else {
+            throw 'No Connected';
+        }
+    }
+    onopen() {
+        this.login();
     }
     async regist(ServiceName, cb) {
         this._services[ServiceName] = cb;
@@ -157,79 +173,88 @@ class WSClient {
         }
     }
     message(data) {
+        let rpc;
         if ('string' == typeof data) {
+            try {
+                rpc = JSON.parse(data);
+            }
+            catch (error) {
+            }
         }
         else {
             try {
-                let rpc = rpc_1.RPC.decode(data);
-                if (rpc.Type == rpc_1.RPCType.Response) {
-                    if (rpc.Status) {
-                        this.resolve(rpc.ID, rpc.Data);
-                    }
-                    else {
-                        this.reject(rpc.ID, rpc.Data);
-                    }
-                }
-                else if (rpc_1.RPCType.Request == rpc.Type) {
-                    if (this._services[rpc.Path]) {
-                        this._services[rpc.Path](rpc.Data).then((rs) => {
-                            if (rpc.NeedReply) {
-                                rpc.Type = rpc_1.RPCType.Response;
-                                rpc.To = rpc.From;
-                                rpc.From = this._address;
-                                rpc.Time = Date.now();
-                                rpc.Data = rs;
-                                rpc.Status = true;
-                                this.send(rpc);
-                            }
-                        }).catch((e) => {
-                            if (rpc.NeedReply) {
-                                rpc.Type = rpc_1.RPCType.Response;
-                                rpc.To = rpc.From;
-                                rpc.From = this._address;
-                                rpc.Time = Date.now();
-                                rpc.Data = e;
-                                rpc.Status = false;
-                                this.send(rpc);
-                            }
-                        });
-                    }
-                }
-                else if (rpc_1.RPCType.Push == rpc.Type) {
-                    this.dispatch(WSClientEvent.Push, rpc);
-                    if (this._push[rpc.Path]) {
-                        this._push[rpc.Path](rpc.Data).then((rs) => {
-                            if (rpc.NeedReply) {
-                                rpc.Type = rpc_1.RPCType.Response;
-                                rpc.To = rpc.From;
-                                rpc.From = this._address;
-                                rpc.Time = Date.now();
-                                rpc.Data = rs;
-                                rpc.Status = true;
-                                this.send(rs);
-                            }
-                        }).catch((e) => {
-                            if (rpc.NeedReply) {
-                                rpc.Type = rpc_1.RPCType.Response;
-                                rpc.To = rpc.From;
-                                rpc.From = this._address;
-                                rpc.Time = Date.now();
-                                rpc.Data = e;
-                                rpc.Status = false;
-                                this.send(rpc);
-                            }
-                        });
-                    }
-                }
-                else if (rpc_1.RPCType.Move == rpc.Type) {
-                    this.dispatch(WSClientEvent.Move, rpc);
-                    this._wsurl = rpc.Data.toString();
-                    this.createws();
-                }
+                rpc = rpc_1.RPC.decode(data);
             }
             catch (error) {
                 console.log(error);
             }
+        }
+        if (rpc === undefined) {
+            return;
+        }
+        if (rpc.Type == rpc_1.RPCType.Response) {
+            if (rpc.Status) {
+                this.resolve(rpc.ID, rpc.Data);
+            }
+            else {
+                this.reject(rpc.ID, rpc.Data);
+            }
+        }
+        else if (rpc_1.RPCType.Request == rpc.Type) {
+            if (this._services[rpc.Path]) {
+                this._services[rpc.Path](rpc.Data).then((rs) => {
+                    if (rpc.NeedReply) {
+                        rpc.Type = rpc_1.RPCType.Response;
+                        rpc.To = rpc.From;
+                        rpc.From = this._address;
+                        rpc.Time = Date.now();
+                        rpc.Data = rs;
+                        rpc.Status = true;
+                        this.send(rpc);
+                    }
+                }).catch((e) => {
+                    if (rpc.NeedReply) {
+                        rpc.Type = rpc_1.RPCType.Response;
+                        rpc.To = rpc.From;
+                        rpc.From = this._address;
+                        rpc.Time = Date.now();
+                        rpc.Data = e;
+                        rpc.Status = false;
+                        this.send(rpc);
+                    }
+                });
+            }
+        }
+        else if (rpc_1.RPCType.Push == rpc.Type) {
+            this.dispatch(WSClientEvent.Push, rpc);
+            if (this._push[rpc.Path]) {
+                this._push[rpc.Path](rpc.Data).then((rs) => {
+                    if (rpc.NeedReply) {
+                        rpc.Type = rpc_1.RPCType.Response;
+                        rpc.To = rpc.From;
+                        rpc.From = this._address;
+                        rpc.Time = Date.now();
+                        rpc.Data = rs;
+                        rpc.Status = true;
+                        this.send(rs);
+                    }
+                }).catch((e) => {
+                    if (rpc.NeedReply) {
+                        rpc.Type = rpc_1.RPCType.Response;
+                        rpc.To = rpc.From;
+                        rpc.From = this._address;
+                        rpc.Time = Date.now();
+                        rpc.Data = e;
+                        rpc.Status = false;
+                        this.send(rpc);
+                    }
+                });
+            }
+        }
+        else if (rpc_1.RPCType.Move == rpc.Type) {
+            this.dispatch(WSClientEvent.Move, rpc);
+            this._wsurl = rpc.Data.toString();
+            this.createws();
         }
     }
     dispatch(event, data) {

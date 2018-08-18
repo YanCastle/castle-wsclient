@@ -45,7 +45,7 @@ export default class WSClient {
         this.createws();
         let heart = new RPC()
         heart.NeedReply = false;
-        heart.Path = 'heart'
+        heart.Path = ''
         heart.Data = ''
         heart.From = this._address
         heart.To = this._server_address
@@ -53,6 +53,7 @@ export default class WSClient {
         this.interval = setInterval(() => {
             if (this._ws.readyState == WebSocket.OPEN) {
                 this.send(heart)
+                // this._ws.ping
             }
         }, 240000)
     }
@@ -86,17 +87,33 @@ export default class WSClient {
             this.message(data)
         }
     }
+    protected login() {
+        if (this._ws.readyState == WebSocket.OPEN) {
+            let login = new RPC()
+            login.NeedReply = false;
+            login.Path = ''
+            login.Data = ''
+            login.From = this._address
+            login.To = this._server_address
+            login.Type = RPCType.Login
+            this.send(login)
+            this.dispatch(WSClientEvent.WebSocketConnected, {})
+            for (let i = 0; i < this._waiting.length; i++) {
+                let rpc: RPC | any = this._waiting.shift();
+                if (rpc)
+                    this.send(rpc)
+            }
+        } else {
+            throw 'No Connected'
+        }
+    }
     /**
      * 连接打开成功
      */
     protected onopen() {
         //处理待发送数据        
-        this.dispatch(WSClientEvent.WebSocketConnected, {})
-        for (let i = 0; i < this._waiting.length; i++) {
-            let rpc: RPC | any = this._waiting.shift();
-            if (rpc)
-                this.send(rpc)
-        }
+        //发起登陆请求
+        this.login()
     }
     /**
      * 注册服务
@@ -215,78 +232,84 @@ export default class WSClient {
      * @param data 
      */
     protected message(data: any) {
+        let rpc: RPC;
         if ('string' == typeof data) {
+            try {
+                rpc = JSON.parse(data)
+            } catch (error) {
 
+            }
         } else {
             try {
-                let rpc = RPC.decode(data)
-                if (rpc.Type == RPCType.Response) {
-                    if (rpc.Status) {
-                        this.resolve(rpc.ID, rpc.Data)
-                    }
-                    else {
-                        this.reject(rpc.ID, rpc.Data)
-                    }
-                } else if (RPCType.Request == rpc.Type) {
-                    //请求供应的服务
-                    if (this._services[rpc.Path]) {
-                        this._services[rpc.Path](rpc.Data).then((rs: any) => {
-                            if (rpc.NeedReply) {
-                                rpc.Type = RPCType.Response
-                                rpc.To = rpc.From
-                                rpc.From = this._address
-                                rpc.Time = Date.now()
-                                rpc.Data = rs;
-                                rpc.Status = true;
-                                this.send(rpc)
-                            }
-                        }).catch((e: any) => {
-                            if (rpc.NeedReply) {
-                                rpc.Type = RPCType.Response
-                                rpc.To = rpc.From
-                                rpc.From = this._address
-                                rpc.Time = Date.now()
-                                rpc.Data = e;
-                                rpc.Status = false;
-                                this.send(rpc)
-                            }
-                        })
-                    }
-                } else if (RPCType.Push == rpc.Type) {
-                    //推送消息
-                    this.dispatch(WSClientEvent.Push, rpc)
-                    if (this._push[rpc.Path]) {
-                        this._push[rpc.Path](rpc.Data).then((rs: any) => {
-                            if (rpc.NeedReply) {
-                                rpc.Type = RPCType.Response
-                                rpc.To = rpc.From
-                                rpc.From = this._address
-                                rpc.Time = Date.now()
-                                rpc.Data = rs;
-                                rpc.Status = true;
-                                this.send(rs)
-                            }
-                        }).catch((e: any) => {
-                            if (rpc.NeedReply) {
-                                rpc.Type = RPCType.Response
-                                rpc.To = rpc.From
-                                rpc.From = this._address
-                                rpc.Time = Date.now()
-                                rpc.Data = e;
-                                rpc.Status = false;
-                                this.send(rpc)
-                            }
-                        })
-                    }
-                } else if (RPCType.Move == rpc.Type) {
-                    //切换服务器地址
-                    this.dispatch(WSClientEvent.Move, rpc)
-                    this._wsurl = rpc.Data.toString()
-                    this.createws()
-                }
+                rpc = RPC.decode(data)
             } catch (error) {
                 console.log(error)
             }
+        }
+        if (rpc === undefined) { return; }
+        if (rpc.Type == RPCType.Response) {
+            if (rpc.Status) {
+                this.resolve(rpc.ID, rpc.Data)
+            }
+            else {
+                this.reject(rpc.ID, rpc.Data)
+            }
+        } else if (RPCType.Request == rpc.Type) {
+            //请求供应的服务
+            if (this._services[rpc.Path]) {
+                this._services[rpc.Path](rpc.Data).then((rs: any) => {
+                    if (rpc.NeedReply) {
+                        rpc.Type = RPCType.Response
+                        rpc.To = rpc.From
+                        rpc.From = this._address
+                        rpc.Time = Date.now()
+                        rpc.Data = rs;
+                        rpc.Status = true;
+                        this.send(rpc)
+                    }
+                }).catch((e: any) => {
+                    if (rpc.NeedReply) {
+                        rpc.Type = RPCType.Response
+                        rpc.To = rpc.From
+                        rpc.From = this._address
+                        rpc.Time = Date.now()
+                        rpc.Data = e;
+                        rpc.Status = false;
+                        this.send(rpc)
+                    }
+                })
+            }
+        } else if (RPCType.Push == rpc.Type) {
+            //推送消息
+            this.dispatch(WSClientEvent.Push, rpc)
+            if (this._push[rpc.Path]) {
+                this._push[rpc.Path](rpc.Data).then((rs: any) => {
+                    if (rpc.NeedReply) {
+                        rpc.Type = RPCType.Response
+                        rpc.To = rpc.From
+                        rpc.From = this._address
+                        rpc.Time = Date.now()
+                        rpc.Data = rs;
+                        rpc.Status = true;
+                        this.send(rs)
+                    }
+                }).catch((e: any) => {
+                    if (rpc.NeedReply) {
+                        rpc.Type = RPCType.Response
+                        rpc.To = rpc.From
+                        rpc.From = this._address
+                        rpc.Time = Date.now()
+                        rpc.Data = e;
+                        rpc.Status = false;
+                        this.send(rpc)
+                    }
+                })
+            }
+        } else if (RPCType.Move == rpc.Type) {
+            //切换服务器地址
+            this.dispatch(WSClientEvent.Move, rpc)
+            this._wsurl = rpc.Data.toString()
+            this.createws()
         }
     }
     /**
