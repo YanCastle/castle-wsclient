@@ -20,7 +20,7 @@ var WSClientError;
     WSClientError["MaxRequest"] = "MaxRequest";
 })(WSClientError = exports.WSClientError || (exports.WSClientError = {}));
 class WSClient {
-    constructor(wsurl, address = "") {
+    constructor(wsurl, address = "", wsInstance = undefined) {
         this._times = 0;
         this._wsurl = "";
         this._id = 0;
@@ -34,7 +34,9 @@ class WSClient {
         this._event = {};
         this._wsurl = wsurl;
         this._address = address;
-        this.createws();
+        if (wsInstance) {
+            this._wsInstance = wsInstance;
+        }
         let heart = new rpc_1.RPC();
         heart.NeedReply = false;
         heart.Path = '';
@@ -43,13 +45,14 @@ class WSClient {
         heart.To = this._server_address;
         heart.Type = rpc_1.RPCType.Heart;
         this.interval = setInterval(() => {
-            if (this._ws.readyState == WebSocket.OPEN) {
+            if (this._ws.readyState == this._wsInstance.OPEN) {
                 this.send(heart);
             }
         }, 240000);
+        this.createws();
     }
     createws() {
-        this._ws = new WebSocket(this._wsurl);
+        this._ws = this._wsInstance(this._wsurl);
         this._ws.binaryType = 'arraybuffer';
         this._ws.onerror = (evt) => {
             this.dispatch(WSClientEvent.WebSocketError, evt);
@@ -75,7 +78,7 @@ class WSClient {
         };
     }
     login() {
-        if (this._ws.readyState == WebSocket.OPEN) {
+        if (this._ws.readyState == this._wsInstance.OPEN) {
             let login = new rpc_1.RPC();
             login.NeedReply = false;
             login.Path = '';
@@ -152,7 +155,7 @@ class WSClient {
         }
     }
     send(rpc) {
-        if (this._ws.readyState == WebSocket.OPEN) {
+        if (this._ws.readyState == this._wsInstance.OPEN) {
             this._ws.send(rpc.encode());
             this.dispatch(WSClientEvent.WebSocketSended, rpc);
         }

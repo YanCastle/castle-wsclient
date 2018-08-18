@@ -21,6 +21,7 @@ export enum WSClientError {
     MaxRequest = 'MaxRequest'
 }
 export default class WSClient {
+    protected _wsInstance: WebSocket | any;
     protected _ws: WebSocket | any;
     protected _times: number = 0;
     protected _wsurl: string = "";
@@ -39,10 +40,10 @@ export default class WSClient {
      * @param wsurl 
      * @param address 
      */
-    constructor(wsurl: string, address: string = "") {
+    constructor(wsurl: string, address: string = "", wsInstance: WebSocket | any = undefined) {
         this._wsurl = wsurl;
         this._address = address;
-        this.createws();
+        if (wsInstance) { this._wsInstance = wsInstance }
         let heart = new RPC()
         heart.NeedReply = false;
         heart.Path = ''
@@ -51,18 +52,19 @@ export default class WSClient {
         heart.To = this._server_address
         heart.Type = RPCType.Heart
         this.interval = setInterval(() => {
-            if (this._ws.readyState == WebSocket.OPEN) {
+            if (this._ws.readyState == this._wsInstance.OPEN) {
                 this.send(heart)
                 // this._ws.ping
             }
         }, 240000)
+        this.createws();
     }
 
     /**
      * 创建连接
      */
     protected createws() {
-        this._ws = new WebSocket(this._wsurl)
+        this._ws = this._wsInstance(this._wsurl)
         this._ws.binaryType = 'arraybuffer'
         this._ws.onerror = (evt: any) => {
             this.dispatch(WSClientEvent.WebSocketError, evt)
@@ -88,7 +90,7 @@ export default class WSClient {
         }
     }
     protected login() {
-        if (this._ws.readyState == WebSocket.OPEN) {
+        if (this._ws.readyState == this._wsInstance.OPEN) {
             let login = new RPC()
             login.NeedReply = false;
             login.Path = ''
@@ -197,7 +199,7 @@ export default class WSClient {
      * @param rpc 
      */
     protected send(rpc: RPC) {
-        if (this._ws.readyState == WebSocket.OPEN) {
+        if (this._ws.readyState == this._wsInstance.OPEN) {
             this._ws.send(rpc.encode())
             this.dispatch(WSClientEvent.WebSocketSended, rpc)
         }
