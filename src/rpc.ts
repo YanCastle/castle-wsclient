@@ -36,7 +36,7 @@ export class RPC {
         let From = this.From.length > 8 ? this.From.substr(0, 8) : this.From.padEnd(8, ' ')
         let To = this.To.length > 8 ? this.To.substr(0, 8) : this.To.padEnd(8, ' ')
         //预留7个字节
-        let b = Buffer.alloc(18)
+        let b = Buffer.alloc(19)
         b[0] |= this.NeedReply ? 0x80 : 0x00
         b[0] |= this.Status ? 0x40 : 0x00
         b[0] |= this.Timeout
@@ -47,11 +47,11 @@ export class RPC {
         b[2] |= (type << 5)
         //开始编码时间和请求类型数据
         let sTime = this.Time.toString();
-        b[3] |= (this.Type << 4)
-        b[3] |= (Number(sTime.substr(0, 1)))
+        b[3] = this.Type
+        b[4] = Number(sTime.substr(0, 1))
 
         for (let i = 0; i < 6; i++) {
-            b[i + 4] = Number(sTime.toString().substr(i * 2 + 1, 2))
+            b[i + 5] = Number(sTime.toString().substr(i * 2 + 1, 2))
         }
 
         // 需要标识数据类型用于做解码
@@ -85,20 +85,20 @@ export class RPC {
         let dt = c >> 5
         let len = c & 0x1F
 
-        t.Type = b[3] >> 4
+        t.Type = b[3]
         let tTime: number[] = [
-            b[3] & 0xF
+            b[4] & 0xF
         ];
         for (let i = 0; i < 6; i++) {
-            tTime.push(b[i + 4])
+            tTime.push(b[i + 5])
         }
 
         t.Time = Number(tTime.join(''))
-        t.From = b.slice(18, 18 + 6).toString().trim()
-        t.To = b.slice(18 + 6, 18 + 6 + 6).toString().trim()
+        t.From = b.slice(19, 19 + 6).toString().trim()
+        t.To = b.slice(19 + 6, 19 + 6 + 6).toString().trim()
         //预留7个字节不处理
-        t.Path = b.slice(34, len + 34).toString()
-        t.Data = b.slice(34 + len)
+        t.Path = b.slice(35, len + 35).toString()
+        t.Data = b.slice(35 + len)
         switch (dt) {
             case DataType.JSON:
                 t.Data = JSON.parse(t.Data.toString())
@@ -134,6 +134,8 @@ export enum RPCType {
     Heart,
     //登陆
     Login,
+    //服务注册,Data==true表示注册，Data==false表示反注册
+    Regist,
 }
 export enum TimeoutUnit {
     s, m
