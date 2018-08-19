@@ -14,14 +14,15 @@ export enum WSClientEvent {
 }
 export interface RequestOption {
     NeedReply?: Boolean,
-    Timeout?: number
+    Timeout?: number,
+    Type?: RPCType
 }
 export enum WSClientError {
     Timeout = 'Timeout',
     MaxRequest = 'MaxRequest'
 }
-export default class WSClient {
-    protected _wsInstance: WebSocket | any;
+export default class RPCClient {
+    protected _wsInstance: WebSocket | any = {};
     protected _ws: WebSocket | any;
     protected _times: number = 0;
     protected _wsurl: string = "";
@@ -43,7 +44,12 @@ export default class WSClient {
     constructor(wsurl: string, address: string = "", wsInstance: WebSocket | any = undefined) {
         this._wsurl = wsurl;
         this._address = address;
-        if (wsInstance) { this._wsInstance = wsInstance }
+        if (wsInstance) {
+            this._wsInstance = wsInstance
+        }
+        else {
+            this._wsInstance = WebSocket
+        }
         let heart = new RPC()
         heart.NeedReply = false;
         heart.Path = ''
@@ -64,7 +70,8 @@ export default class WSClient {
      * 创建连接
      */
     protected createws() {
-        this._ws = this._wsInstance(this._wsurl)
+        let s = this._wsInstance;
+        this._ws = new s(this._wsurl)
         this._ws.binaryType = 'arraybuffer'
         this._ws.onerror = (evt: any) => {
             this.dispatch(WSClientEvent.WebSocketError, evt)
@@ -84,7 +91,7 @@ export default class WSClient {
             this.onopen()
         }
         this._ws.onmessage = (evt: any) => {
-            let data = new Buffer(evt.data)
+            let data = Buffer.from(evt.data)
             this.dispatch(WSClientEvent.WebSocketMessage, data)
             this.message(data)
         }
@@ -123,7 +130,9 @@ export default class WSClient {
      * @param cb 
      */
     async regist(ServiceName: string, cb: (data: any) => Promise<any>) {
-        this._services[ServiceName] = cb;
+        let rs = await this.request(ServiceName, true, { Type: RPCType.Regist, NeedReply: true })
+        if (rs)
+            this._services[ServiceName] = cb;
     }
     /**
      * 反向注册服务
@@ -160,7 +169,7 @@ export default class WSClient {
         r.ID = this.getRequestID()
         r.From = this._address;
         r.To = this._server_address;
-        r.Type = RPCType.Request;
+        r.Type = options.Type ? options.Type : RPCType.Request;
         r.Time = Date.now()
         if (options.Timeout && options.Timeout > 0) {
             r.Timeout = Number(options.Timeout)
@@ -168,7 +177,7 @@ export default class WSClient {
                 this.reject(r.ID, new Error(WSClientError.Timeout))
             }, options.Timeout)
         }
-        if (options.NeedReply === true || options.NeedReply === undefined) {
+        if (options.NeedReply !== false) {
             r.NeedReply = true;
             return new Promise((resolve, reject) => {
                 this.send(r)
@@ -280,6 +289,16 @@ export default class WSClient {
                         this.send(rpc)
                     }
                 })
+            } else {
+                if (rpc.NeedReply) {
+                    rpc.Type = RPCType.Response
+                    rpc.To = rpc.From
+                    rpc.From = this._address
+                    rpc.Time = Date.now()
+                    rpc.Data = 'NoService';
+                    rpc.Status = false;
+                    this.send(rpc)
+                }
             }
         } else if (RPCType.Push == rpc.Type) {
             //推送消息
