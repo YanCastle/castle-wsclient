@@ -19,8 +19,9 @@ var WSClientError;
     WSClientError["Timeout"] = "Timeout";
     WSClientError["MaxRequest"] = "MaxRequest";
 })(WSClientError = exports.WSClientError || (exports.WSClientError = {}));
-class WSClient {
+class RPCClient {
     constructor(wsurl, address = "", wsInstance = undefined) {
+        this._wsInstance = {};
         this._times = 0;
         this._wsurl = "";
         this._id = 0;
@@ -37,6 +38,9 @@ class WSClient {
         if (wsInstance) {
             this._wsInstance = wsInstance;
         }
+        else {
+            this._wsInstance = WebSocket;
+        }
         let heart = new rpc_1.RPC();
         heart.NeedReply = false;
         heart.Path = '';
@@ -52,7 +56,8 @@ class WSClient {
         this.createws();
     }
     createws() {
-        this._ws = this._wsInstance(this._wsurl);
+        let s = this._wsInstance;
+        this._ws = new s(this._wsurl);
         this._ws.binaryType = 'arraybuffer';
         this._ws.onerror = (evt) => {
             this.dispatch(WSClientEvent.WebSocketError, evt);
@@ -72,7 +77,7 @@ class WSClient {
             this.onopen();
         };
         this._ws.onmessage = (evt) => {
-            let data = new Buffer(evt.data);
+            let data = Buffer.from(evt.data);
             this.dispatch(WSClientEvent.WebSocketMessage, data);
             this.message(data);
         };
@@ -102,7 +107,9 @@ class WSClient {
         this.login();
     }
     async regist(ServiceName, cb) {
-        this._services[ServiceName] = cb;
+        let rs = await this.request(ServiceName, true, { Type: rpc_1.RPCType.Regist, NeedReply: true });
+        if (rs)
+            this._services[ServiceName] = cb;
     }
     async unregist(ServiceName) {
         delete this._services[ServiceName];
@@ -120,7 +127,7 @@ class WSClient {
         r.ID = this.getRequestID();
         r.From = this._address;
         r.To = this._server_address;
-        r.Type = rpc_1.RPCType.Request;
+        r.Type = options.Type ? options.Type : rpc_1.RPCType.Request;
         r.Time = Date.now();
         if (options.Timeout && options.Timeout > 0) {
             r.Timeout = Number(options.Timeout);
@@ -128,7 +135,7 @@ class WSClient {
                 this.reject(r.ID, new Error(WSClientError.Timeout));
             }, options.Timeout);
         }
-        if (options.NeedReply === true || options.NeedReply === undefined) {
+        if (options.NeedReply !== false) {
             r.NeedReply = true;
             return new Promise((resolve, reject) => {
                 this.send(r);
@@ -227,6 +234,17 @@ class WSClient {
                     }
                 });
             }
+            else {
+                if (rpc.NeedReply) {
+                    rpc.Type = rpc_1.RPCType.Response;
+                    rpc.To = rpc.From;
+                    rpc.From = this._address;
+                    rpc.Time = Date.now();
+                    rpc.Data = 'NoService';
+                    rpc.Status = false;
+                    this.send(rpc);
+                }
+            }
         }
         else if (rpc_1.RPCType.Push == rpc.Type) {
             this.dispatch(WSClientEvent.Push, rpc);
@@ -277,5 +295,5 @@ class WSClient {
         clearInterval(this.interval);
     }
 }
-exports.default = WSClient;
+exports.default = RPCClient;
 //# sourceMappingURL=index.js.map

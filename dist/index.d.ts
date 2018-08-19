@@ -1,4 +1,4 @@
-import { RPC } from './rpc';
+import { RPC, RPCType } from './rpc';
 export declare enum WSClientEvent {
     ReceiveStringError = 0,
     DeocdeError = 1,
@@ -14,12 +14,13 @@ export declare enum WSClientEvent {
 export interface RequestOption {
     NeedReply?: Boolean;
     Timeout?: number;
+    Type?: RPCType;
 }
 export declare enum WSClientError {
     Timeout = "Timeout",
     MaxRequest = "MaxRequest",
 }
-export default class WSClient {
+export default class RPCClient {
     protected _wsInstance: WebSocket | any;
     protected _ws: WebSocket | any;
     protected _times: number;
