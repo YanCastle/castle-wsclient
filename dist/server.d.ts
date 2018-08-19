@@ -1,6 +1,7 @@
 /// <reference types="node" />
 import { RPC } from './rpc';
 export declare class RPCServer {
+    protected ClientAddress: number;
     protected clients: {
         [index: string]: {
             options: any;
@@ -17,12 +18,20 @@ export declare class RPCServer {
         debug?: boolean;
     });
     controller(path: string, data: any, rpc: RPC, options: any): Promise<boolean>;
+    getClients(): string[];
+    getClient(ID: string): {
+        options: any;
+        services: string[];
+    };
+    getServices(): string[];
+    getServicesClients(ServiceName: string): string[];
     send(content: string | Buffer, options: any): Promise<void>;
     sendTo(ID: string, content: string | Buffer, options: any): Promise<void>;
     message(data: any, options: {
         ID: string;
         [index: string]: any;
     }): Promise<void>;
+    protected genClientAddress(): string;
     push(to: string, path: string, data: any): Promise<void>;
     close(ctx: any): Promise<void>;
     request(to: string, path: string, data: any, options?: {

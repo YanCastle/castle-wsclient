@@ -1,5 +1,12 @@
 import { RPC, RPCType } from './rpc'
+const code = [
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T'
+    , 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
+    't', 'u', 'v', 'w', 'x', 'y', 'z']
+const codeLen = code.length;
+const max = 218340105584896;
 export class RPCServer {
+    protected ClientAddress: number = 0
     protected clients: {
         [index: string]: {
             options: any,
@@ -15,6 +22,32 @@ export class RPCServer {
     constructor(options: { debug?: boolean }) { }
     async controller(path: string, data: any, rpc: RPC, options: any) {
         return true;
+    }
+    /**
+     * 获取所有终端
+     */
+    getClients() {
+        return Object.keys(this.clients)
+    }
+    /**
+     * 获取指定客户端
+     * @param ID 
+     */
+    getClient(ID: string) {
+        return this.clients[ID]
+    }
+    /**
+     * 获取所有服务
+     */
+    getServices() {
+        return Object.keys(this.services)
+    }
+    /**
+     * 查询具有某个服务的在线设备
+     * @param ServiceName 
+     */
+    getServicesClients(ServiceName: string) {
+        return this.services[ServiceName] ? Object.keys(this.services[ServiceName]) : []
     }
     async send(content: string | Buffer, options: any) {
         throw ServerError.UNKONW_SEND
@@ -65,11 +98,24 @@ export class RPCServer {
                     this.resolve(rpc.ID, rpc.Data)
                     break;
                 case RPCType.Login:
-                    this.clients[rpc.From] = {
-                        options,
-                        services: []
-                    };
-                    options.ID = rpc.From
+                    rpc.Data = true
+                    rpc.Type = RPCType.Response
+                    if (this.clients[rpc.From] || rpc.From.replace(/0/g, '').length == 0) {
+                        rpc.Status = false;
+                        rpc.Data = this.genClientAddress()
+                    } else {
+                        if (options.ID) {
+                            this.close(options)
+                        }
+                        options.ID = rpc.From;
+                        this.clients[rpc.From] = {
+                            options,
+                            services: []
+                        };
+                    }
+                    rpc.To = rpc.From
+                    rpc.From = ''
+                    this.send(rpc.encode(), options)
                     break;
                 case RPCType.Regist:
                     if (!this.services[rpc.Path]) { this.services[rpc.Path] = {} }
@@ -94,7 +140,25 @@ export class RPCServer {
 
         }
     }
-
+    protected genClientAddress() {
+        let r = "";
+        let o = ++this.ClientAddress
+        while (true) {
+            r += o % codeLen
+            if (o > codeLen) {
+                o = Math.floor(o / codeLen)
+            } else {
+                if (this.clients[r]) {
+                    o = ++this.ClientAddress
+                    if (max < o) {
+                        this.ClientAddress = 0
+                        o = 0;
+                    }
+                } else
+                    return r;
+            }
+        }
+    }
     async push(to: string, path: string, data: any) {
         if (this.clients[to]) {
             let rpc = new RPC()

@@ -96,21 +96,23 @@ export default class RPCClient {
             this.message(data)
         }
     }
-    protected login() {
+    protected async login() {
         if (this._ws.readyState == this._wsInstance.OPEN) {
-            let login = new RPC()
-            login.NeedReply = false;
-            login.Path = ''
-            login.Data = ''
-            login.From = this._address
-            login.To = this._server_address
-            login.Type = RPCType.Login
-            this.send(login)
-            this.dispatch(WSClientEvent.WebSocketConnected, {})
-            for (let i = 0; i < this._waiting.length; i++) {
-                let rpc: RPC | any = this._waiting.shift();
-                if (rpc)
-                    this.send(rpc)
+            try {
+                await this.request('', '', { Type: RPCType.Login, NeedReply: true })
+                this.dispatch(WSClientEvent.WebSocketConnected, {})
+                Object.keys(this._services).forEach((ServiceName) => {
+                    this.request(ServiceName, true, { Type: RPCType.Regist, NeedReply: true })
+                })
+                for (let i = 0; i < this._waiting.length; i++) {
+                    let rpc: RPC | any = this._waiting.shift();
+                    rpc.From = this._address
+                    if (rpc)
+                        this.send(rpc)
+                }
+            } catch (address) {
+                this._address = address
+                return await this.login()
             }
         } else {
             throw 'No Connected'
@@ -133,6 +135,8 @@ export default class RPCClient {
         let rs = await this.request(ServiceName, true, { Type: RPCType.Regist, NeedReply: true })
         if (rs)
             this._services[ServiceName] = cb;
+        else
+            throw 'Error'
     }
     /**
      * 反向注册服务

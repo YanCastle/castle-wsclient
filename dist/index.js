@@ -82,21 +82,24 @@ class RPCClient {
             this.message(data);
         };
     }
-    login() {
+    async login() {
         if (this._ws.readyState == this._wsInstance.OPEN) {
-            let login = new rpc_1.RPC();
-            login.NeedReply = false;
-            login.Path = '';
-            login.Data = '';
-            login.From = this._address;
-            login.To = this._server_address;
-            login.Type = rpc_1.RPCType.Login;
-            this.send(login);
-            this.dispatch(WSClientEvent.WebSocketConnected, {});
-            for (let i = 0; i < this._waiting.length; i++) {
-                let rpc = this._waiting.shift();
-                if (rpc)
-                    this.send(rpc);
+            try {
+                await this.request('', '', { Type: rpc_1.RPCType.Login, NeedReply: true });
+                this.dispatch(WSClientEvent.WebSocketConnected, {});
+                Object.keys(this._services).forEach((ServiceName) => {
+                    this.request(ServiceName, true, { Type: rpc_1.RPCType.Regist, NeedReply: true });
+                });
+                for (let i = 0; i < this._waiting.length; i++) {
+                    let rpc = this._waiting.shift();
+                    rpc.From = this._address;
+                    if (rpc)
+                        this.send(rpc);
+                }
+            }
+            catch (address) {
+                this._address = address;
+                return await this.login();
             }
         }
         else {
@@ -110,6 +113,8 @@ class RPCClient {
         let rs = await this.request(ServiceName, true, { Type: rpc_1.RPCType.Regist, NeedReply: true });
         if (rs)
             this._services[ServiceName] = cb;
+        else
+            throw 'Error';
     }
     async unregist(ServiceName) {
         delete this._services[ServiceName];

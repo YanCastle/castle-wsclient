@@ -44,7 +44,7 @@ export default class RPCClient {
     protected interval: any;
     constructor(wsurl: string, address?: string, wsInstance?: WebSocket | any);
     protected createws(): void;
-    protected login(): void;
+    protected login(): any;
     protected onopen(): void;
     regist(ServiceName: string, cb: (data: any) => Promise<any>): Promise<void>;
     unregist(ServiceName: string): Promise<void>;

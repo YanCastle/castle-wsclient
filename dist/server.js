@@ -1,8 +1,16 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const rpc_1 = require("./rpc");
+const code = [
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T',
+    'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
+    't', 'u', 'v', 'w', 'x', 'y', 'z'
+];
+const codeLen = code.length;
+const max = 218340105584896;
 class RPCServer {
     constructor(options) {
+        this.ClientAddress = 0;
         this.clients = {};
         this.services = {};
         this.debug = false;
@@ -10,6 +18,18 @@ class RPCServer {
     }
     async controller(path, data, rpc, options) {
         return true;
+    }
+    getClients() {
+        return Object.keys(this.clients);
+    }
+    getClient(ID) {
+        return this.clients[ID];
+    }
+    getServices() {
+        return Object.keys(this.services);
+    }
+    getServicesClients(ServiceName) {
+        return this.services[ServiceName] ? Object.keys(this.services[ServiceName]) : [];
     }
     async send(content, options) {
         throw ServerError.UNKONW_SEND;
@@ -61,11 +81,25 @@ class RPCServer {
                     this.resolve(rpc.ID, rpc.Data);
                     break;
                 case rpc_1.RPCType.Login:
-                    this.clients[rpc.From] = {
-                        options,
-                        services: []
-                    };
-                    options.ID = rpc.From;
+                    rpc.Data = true;
+                    rpc.Type = rpc_1.RPCType.Response;
+                    if (this.clients[rpc.From] || rpc.From.replace(/0/g, '').length == 0) {
+                        rpc.Status = false;
+                        rpc.Data = this.genClientAddress();
+                    }
+                    else {
+                        if (options.ID) {
+                            this.close(options);
+                        }
+                        options.ID = rpc.From;
+                        this.clients[rpc.From] = {
+                            options,
+                            services: []
+                        };
+                    }
+                    rpc.To = rpc.From;
+                    rpc.From = '';
+                    this.send(rpc.encode(), options);
                     break;
                 case rpc_1.RPCType.Regist:
                     if (!this.services[rpc.Path]) {
@@ -91,6 +125,27 @@ class RPCServer {
             }
         }
         catch (error) {
+        }
+    }
+    genClientAddress() {
+        let r = "";
+        let o = ++this.ClientAddress;
+        while (true) {
+            r += o % codeLen;
+            if (o > codeLen) {
+                o = Math.floor(o / codeLen);
+            }
+            else {
+                if (this.clients[r]) {
+                    o = ++this.ClientAddress;
+                    if (max < o) {
+                        this.ClientAddress = 0;
+                        o = 0;
+                    }
+                }
+                else
+                    return r;
+            }
         }
     }
     async push(to, path, data) {
