@@ -1,15 +1,17 @@
 {
   "name": "castle-wsclient",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "",
   "main": "dist/index.js",
   "files": [
     "dist/index.js",
     "dist/index.d.ts",
-    "rpc.js",
-    "rpc.d.ts",
-    "server.js",
-    "server.d.ts",
+    "dist/rpc.js",
+    "dist/rpc.d.ts",
+    "dist/server.js",
+    "dist/server.d.ts",
+    "dist/utils.js",
+    "dist/utils.d.ts",
     "README.md"
   ],
   "types": "dist/index.d.ts",
