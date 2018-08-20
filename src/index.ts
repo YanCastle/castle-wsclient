@@ -1,5 +1,6 @@
 import { RPC, RPCType } from './rpc';
 // import { Buffer } from 'buffer'
+import { checkTopic } from './utils';
 export enum WSClientEvent {
     ReceiveStringError,
     DeocdeError,
@@ -7,10 +8,12 @@ export enum WSClientEvent {
     Push,
     Service,
     Move,
+    Message,
     WebSocketConnected,
     WebSocketSended,
     WebSocketClosed,
     WebSocketMessage,
+    Logined,
 }
 export interface RequestOption {
     NeedReply?: Boolean,
@@ -37,6 +40,9 @@ export default class RPCClient {
     protected _push: { [index: string]: (data: any) => Promise<any> } = {}
     protected _waiting: RPC[] = [];
     protected interval: any = 0;
+    protected subscribes: { [index: string]: ((data: any, from: string, topic: string) => any)[] } = {}
+    protected _logined: boolean = false;
+    get isLogin() { return this._logined }
     /**
      * 构造函数
      * @param wsurl 
@@ -65,7 +71,7 @@ export default class RPCClient {
         heart.To = this._server_address
         heart.Type = RPCType.Heart
         this.interval = setInterval(() => {
-            if (this._ws.readyState == this._wsInstance.OPEN) {
+            if (this._ws.readyState == this._wsInstance.OPEN && this._logined) {
                 this.send(heart)
                 // this._ws.ping
             }
@@ -81,6 +87,7 @@ export default class RPCClient {
         this._ws = new s(this._wsurl)
         this._ws.binaryType = 'arraybuffer'
         this._ws.onerror = (evt: any) => {
+            this._logined = false;
             this.dispatch(WSClientEvent.WebSocketError, evt)
             setTimeout(() => {
                 this.createws()
@@ -90,6 +97,7 @@ export default class RPCClient {
             this._times++;
         }
         this._ws.onclose = () => {
+            this._logined = false;
             setTimeout(() => {
                 this.createws()
             }, 5000)
@@ -107,9 +115,14 @@ export default class RPCClient {
         if (this._ws.readyState == this._wsInstance.OPEN) {
             try {
                 await this.request('', '', { Type: RPCType.Login, NeedReply: true })
-                this.dispatch(WSClientEvent.WebSocketConnected, {})
+                this._logined = true;
+                this.dispatch(WSClientEvent.Logined, this._address)
+                // this.dispatch(WSClientEvent.WebSocketConnected, {})
                 Object.keys(this._services).forEach((ServiceName) => {
                     this.request(ServiceName, true, { Type: RPCType.Regist, NeedReply: true })
+                })
+                Object.keys(this.subscribes).forEach((topic) => {
+                    this.request('', topic, { Type: RPCType.Sub, NeedReply: true })
                 })
                 for (let i = 0; i < this._waiting.length; i++) {
                     let rpc: RPC | any = this._waiting.shift();
@@ -118,8 +131,11 @@ export default class RPCClient {
                         this.send(rpc)
                 }
             } catch (address) {
-                this._address = address
-                return await this.login()
+                if ('string' == typeof address) {
+                    this._address = address
+                    return await this.login()
+                }
+                throw address.message
             }
         } else {
             throw 'No Connected'
@@ -268,7 +284,8 @@ export default class RPCClient {
                 console.log(error)
             }
         }
-        if (rpc === undefined) { return; }
+        if (rpc === undefined || rpc.To !== this._address) { return; }
+        this.dispatch(WSClientEvent.Message, rpc)
         switch (rpc.Type) {
             case RPCType.Response:
                 if (rpc.Status) {
@@ -350,7 +367,68 @@ export default class RPCClient {
                 this._wsurls.push(this._wsurl)
                 this.createws()
                 break;
+            case RPCType.Pub:
+                //处理订阅推送，触发订阅回调
+                if (this.subscribes[rpc.Path]) {
+                    // console.log(this.subscribes[rpc.Path].length)
+                    this.subscribes[rpc.Path].forEach((e: Function) => {
+                        e(rpc.Data, rpc.From, rpc.Path)
+                    })
+                }
+                break;
         }
+    }
+    /**
+     * 订阅
+     * @param topic 
+     * @param cb 
+     */
+    public async subscribe(topic: string | string[], cb: (data: any, from?: string, topic?: string) => any) {
+        let Data: any = [];
+        if ('string' == typeof topic && checkTopic(topic)) {
+            Data = [topic]
+        } else if (topic instanceof Array) {
+            topic.forEach((t: string) => {
+                if (checkTopic(t)) {
+                    Data.push(t)
+                }
+            })
+        }
+        await this.request('', Data, { Type: RPCType.Sub, NeedReply: true })
+        Data.forEach((t: string) => {
+            if (!this.subscribes[t]) { this.subscribes[t] = [] }
+            this.subscribes[t].push(cb)
+        })
+        return true;
+    }
+    /**
+     * 取消订阅
+     * @param topic 
+     */
+    public async unsubscribe(topic) {
+        let Data: any = [];
+        if ('string' == typeof topic && checkTopic(topic)) {
+            Data = [topic]
+        } else if (topic instanceof Array) {
+            topic.forEach((t: string) => {
+                if (checkTopic(t)) {
+                    Data.push(t)
+                }
+            })
+        }
+        await this.request('', Data, { Type: RPCType.UnSub, NeedReply: true })
+        Data.forEach((t: string) => {
+            if (this.subscribes[t]) { delete this.subscribes[t] }
+        })
+        return true;
+    }
+    /**
+     * 发布
+     * @param topic 
+     * @param data 
+     */
+    public async publish(topic: string, data: any) {
+        return await this.request(topic, data, { Type: RPCType.Pub, NeedReply: true })
     }
     /**
      * 触发事件
