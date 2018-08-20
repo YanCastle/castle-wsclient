@@ -2,8 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 class RPC {
     constructor() {
-        this.From = "00000000";
-        this.To = "00000000";
+        this.From = "";
+        this.To = "";
         this.NeedReply = true;
         this.Status = true;
         this.Timeout = 0;
@@ -72,8 +72,8 @@ class RPC {
             tTime.push(b[i + 5]);
         }
         t.Time = Number(tTime.join(''));
-        t.From = b.slice(19, 19 + 6).toString().trim();
-        t.To = b.slice(19 + 6, 19 + 6 + 6).toString().trim();
+        t.From = b.slice(19, 19 + 8).toString().trim();
+        t.To = b.slice(19 + 8, 19 + 8 + 8).toString().trim();
         t.Path = b.slice(35, len + 35).toString();
         t.Data = b.slice(35 + len);
         switch (dt) {
@@ -106,6 +106,9 @@ var RPCType;
     RPCType[RPCType["Heart"] = 5] = "Heart";
     RPCType[RPCType["Login"] = 6] = "Login";
     RPCType[RPCType["Regist"] = 7] = "Regist";
+    RPCType[RPCType["Pub"] = 8] = "Pub";
+    RPCType[RPCType["Sub"] = 9] = "Sub";
+    RPCType[RPCType["UnSub"] = 10] = "UnSub";
 })(RPCType = exports.RPCType || (exports.RPCType = {}));
 var TimeoutUnit;
 (function (TimeoutUnit) {

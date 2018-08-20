@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const rpc_1 = require("./rpc");
+const utils_1 = require("./utils");
 var WSClientEvent;
 (function (WSClientEvent) {
     WSClientEvent[WSClientEvent["ReceiveStringError"] = 0] = "ReceiveStringError";
@@ -9,10 +10,12 @@ var WSClientEvent;
     WSClientEvent[WSClientEvent["Push"] = 3] = "Push";
     WSClientEvent[WSClientEvent["Service"] = 4] = "Service";
     WSClientEvent[WSClientEvent["Move"] = 5] = "Move";
-    WSClientEvent[WSClientEvent["WebSocketConnected"] = 6] = "WebSocketConnected";
-    WSClientEvent[WSClientEvent["WebSocketSended"] = 7] = "WebSocketSended";
-    WSClientEvent[WSClientEvent["WebSocketClosed"] = 8] = "WebSocketClosed";
-    WSClientEvent[WSClientEvent["WebSocketMessage"] = 9] = "WebSocketMessage";
+    WSClientEvent[WSClientEvent["Message"] = 6] = "Message";
+    WSClientEvent[WSClientEvent["WebSocketConnected"] = 7] = "WebSocketConnected";
+    WSClientEvent[WSClientEvent["WebSocketSended"] = 8] = "WebSocketSended";
+    WSClientEvent[WSClientEvent["WebSocketClosed"] = 9] = "WebSocketClosed";
+    WSClientEvent[WSClientEvent["WebSocketMessage"] = 10] = "WebSocketMessage";
+    WSClientEvent[WSClientEvent["Logined"] = 11] = "Logined";
 })(WSClientEvent = exports.WSClientEvent || (exports.WSClientEvent = {}));
 var WSClientError;
 (function (WSClientError) {
@@ -33,6 +36,8 @@ class RPCClient {
         this._push = {};
         this._waiting = [];
         this.interval = 0;
+        this.subscribes = {};
+        this._logined = false;
         this._event = {};
         if (wsurl instanceof Array) {
             this._wsurl = wsurl[0];
@@ -57,17 +62,19 @@ class RPCClient {
         heart.To = this._server_address;
         heart.Type = rpc_1.RPCType.Heart;
         this.interval = setInterval(() => {
-            if (this._ws.readyState == this._wsInstance.OPEN) {
+            if (this._ws.readyState == this._wsInstance.OPEN && this._logined) {
                 this.send(heart);
             }
         }, 240000);
         this.createws();
     }
+    get isLogin() { return this._logined; }
     createws() {
         let s = this._wsInstance;
         this._ws = new s(this._wsurl);
         this._ws.binaryType = 'arraybuffer';
         this._ws.onerror = (evt) => {
+            this._logined = false;
             this.dispatch(WSClientEvent.WebSocketError, evt);
             setTimeout(() => {
                 this.createws();
@@ -77,6 +84,7 @@ class RPCClient {
             this._times++;
         };
         this._ws.onclose = () => {
+            this._logined = false;
             setTimeout(() => {
                 this.createws();
             }, 5000);
@@ -94,9 +102,13 @@ class RPCClient {
         if (this._ws.readyState == this._wsInstance.OPEN) {
             try {
                 await this.request('', '', { Type: rpc_1.RPCType.Login, NeedReply: true });
-                this.dispatch(WSClientEvent.WebSocketConnected, {});
+                this._logined = true;
+                this.dispatch(WSClientEvent.Logined, this._address);
                 Object.keys(this._services).forEach((ServiceName) => {
                     this.request(ServiceName, true, { Type: rpc_1.RPCType.Regist, NeedReply: true });
+                });
+                Object.keys(this.subscribes).forEach((topic) => {
+                    this.request('', topic, { Type: rpc_1.RPCType.Sub, NeedReply: true });
                 });
                 for (let i = 0; i < this._waiting.length; i++) {
                     let rpc = this._waiting.shift();
@@ -106,8 +118,11 @@ class RPCClient {
                 }
             }
             catch (address) {
-                this._address = address;
-                return await this.login();
+                if ('string' == typeof address) {
+                    this._address = address;
+                    return await this.login();
+                }
+                throw address.message;
             }
         }
         else {
@@ -212,9 +227,10 @@ class RPCClient {
                 console.log(error);
             }
         }
-        if (rpc === undefined) {
+        if (rpc === undefined || rpc.To !== this._address) {
             return;
         }
+        this.dispatch(WSClientEvent.Message, rpc);
         switch (rpc.Type) {
             case rpc_1.RPCType.Response:
                 if (rpc.Status) {
@@ -296,7 +312,58 @@ class RPCClient {
                 this._wsurls.push(this._wsurl);
                 this.createws();
                 break;
+            case rpc_1.RPCType.Pub:
+                if (this.subscribes[rpc.Path]) {
+                    this.subscribes[rpc.Path].forEach((e) => {
+                        e(rpc.Data, rpc.From, rpc.Path);
+                    });
+                }
+                break;
         }
+    }
+    async subscribe(topic, cb) {
+        let Data = [];
+        if ('string' == typeof topic && utils_1.checkTopic(topic)) {
+            Data = [topic];
+        }
+        else if (topic instanceof Array) {
+            topic.forEach((t) => {
+                if (utils_1.checkTopic(t)) {
+                    Data.push(t);
+                }
+            });
+        }
+        await this.request('', Data, { Type: rpc_1.RPCType.Sub, NeedReply: true });
+        Data.forEach((t) => {
+            if (!this.subscribes[t]) {
+                this.subscribes[t] = [];
+            }
+            this.subscribes[t].push(cb);
+        });
+        return true;
+    }
+    async unsubscribe(topic) {
+        let Data = [];
+        if ('string' == typeof topic && utils_1.checkTopic(topic)) {
+            Data = [topic];
+        }
+        else if (topic instanceof Array) {
+            topic.forEach((t) => {
+                if (utils_1.checkTopic(t)) {
+                    Data.push(t);
+                }
+            });
+        }
+        await this.request('', Data, { Type: rpc_1.RPCType.UnSub, NeedReply: true });
+        Data.forEach((t) => {
+            if (this.subscribes[t]) {
+                delete this.subscribes[t];
+            }
+        });
+        return true;
+    }
+    async publish(topic, data) {
+        return await this.request(topic, data, { Type: rpc_1.RPCType.Pub, NeedReply: true });
     }
     dispatch(event, data) {
         if (this._event[event]) {

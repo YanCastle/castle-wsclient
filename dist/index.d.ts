@@ -6,10 +6,12 @@ export declare enum WSClientEvent {
     Push = 3,
     Service = 4,
     Move = 5,
-    WebSocketConnected = 6,
-    WebSocketSended = 7,
-    WebSocketClosed = 8,
-    WebSocketMessage = 9,
+    Message = 6,
+    WebSocketConnected = 7,
+    WebSocketSended = 8,
+    WebSocketClosed = 9,
+    WebSocketMessage = 10,
+    Logined = 11,
 }
 export interface RequestOption {
     NeedReply?: Boolean;
@@ -43,6 +45,11 @@ export default class RPCClient {
     };
     protected _waiting: RPC[];
     protected interval: any;
+    protected subscribes: {
+        [index: string]: ((data: any, from: string, topic: string) => any)[];
+    };
+    protected _logined: boolean;
+    readonly isLogin: boolean;
     constructor(wsurl: string | string[], address?: string, wsInstance?: WebSocket | any);
     protected createws(): void;
     protected login(): any;
@@ -57,6 +64,9 @@ export default class RPCClient {
     protected resolve(ID: number, data: any): void;
     protected reject(ID: number, data: any): void;
     protected message(data: any): void;
+    subscribe(topic: string | string[], cb: (data: any, from?: string, topic?: string) => any): Promise<boolean>;
+    unsubscribe(topic: any): Promise<boolean>;
+    publish(topic: string, data: any): Promise<{}>;
     protected dispatch(event: WSClientEvent, data: any): void;
     protected _event: {
         [index: number]: Function[];

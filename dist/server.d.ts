@@ -6,12 +6,16 @@ export declare class RPCServer {
         [index: string]: {
             options: any;
             services: string[];
+            subscribes: string[];
         };
     };
     protected services: {
         [index: string]: {
             [index: string]: any;
         };
+    };
+    protected subscribes: {
+        [index: string]: string[];
     };
     protected debug: boolean;
     constructor(options: {
@@ -22,16 +26,18 @@ export declare class RPCServer {
     getClient(ID: string): {
         options: any;
         services: string[];
+        subscribes: string[];
     };
     getServices(): string[];
     getServicesClients(ServiceName: string): string[];
     send(content: string | Buffer, options: any): Promise<void>;
-    sendTo(ID: string, content: string | Buffer, options: any): Promise<void>;
+    sendTo(ID: string, content: string | Buffer, options?: any): Promise<void>;
     message(data: any, options: {
         ID: string;
         [index: string]: any;
     }): Promise<void>;
-    protected genClientAddress(): string;
+    protected handleSubscribe(ID: string, topic: string): void;
+    protected genClientAddress(): string | number;
     push(to: string, path: string, data: any): Promise<void>;
     close(ctx: any): Promise<void>;
     request(to: string, path: string, data: any, options?: {

@@ -7,8 +7,8 @@ r.NeedReply = true;
 r.Type = RPCType.Request
 r.Data = { abc: 1 }
 r.Path = '1/1'
-r.From = 'A5'
-r.To = 'Z5'
+r.From = 'docker'
+r.To = 'docker'
 let b = r.encode()
 let c = RPC.decode(b)
 console.log(c)
