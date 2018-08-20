@@ -9,9 +9,9 @@
 // }
 export class RPC {
     //来源 8 字节
-    From: string | any = "00000000";
+    From: string | any = "";
     //接收方 8 字节
-    To: string | any = "00000000";
+    To: string | any = "";
     //是否需要回复，若不需要回复这不创建Promise，否则创建Promise并控制超时逻辑
     NeedReply: boolean = true;
     //响应状态，成功、失败
@@ -94,8 +94,8 @@ export class RPC {
         }
 
         t.Time = Number(tTime.join(''))
-        t.From = b.slice(19, 19 + 6).toString().trim()
-        t.To = b.slice(19 + 6, 19 + 6 + 6).toString().trim()
+        t.From = b.slice(19, 19 + 8).toString().trim()
+        t.To = b.slice(19 + 8, 19 + 8 + 8).toString().trim()
         //预留7个字节不处理
         t.Path = b.slice(35, len + 35).toString()
         t.Data = b.slice(35 + len)
@@ -136,6 +136,12 @@ export enum RPCType {
     Login,
     //服务注册,Data==true表示注册，Data==false表示反注册
     Regist,
+    //发布
+    Pub,
+    //订阅
+    Sub,
+    //取消订阅
+    UnSub,
 }
 export enum TimeoutUnit {
     s, m
