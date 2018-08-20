@@ -1,16 +1,14 @@
 import { RPC, RPCType } from './rpc'
-const code = [
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T'
-    , 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
-    't', 'u', 'v', 'w', 'x', 'y', 'z']
-const codeLen = code.length;
+import { checkTopic } from './utils';
+import { base_covert } from 'castle-covert';
 const max = 218340105584896;
 export class RPCServer {
     protected ClientAddress: number = 0
     protected clients: {
         [index: string]: {
             options: any,
-            services: string[]
+            services: string[],
+            subscribes: string[]
         }
     } = {}
     protected services: {
@@ -18,6 +16,10 @@ export class RPCServer {
             [index: string]: any
         }
     } = {}
+    /**
+     * 订阅列表
+     */
+    protected subscribes: { [index: string]: string[] } = {}
     protected debug: boolean = false;
     constructor(options: { debug?: boolean }) { }
     async controller(path: string, data: any, rpc: RPC, options: any) {
@@ -49,12 +51,28 @@ export class RPCServer {
     getServicesClients(ServiceName: string) {
         return this.services[ServiceName] ? Object.keys(this.services[ServiceName]) : []
     }
+    /**
+     * 发送
+     * @param content 
+     * @param options 
+     */
     async send(content: string | Buffer, options: any) {
         throw ServerError.UNKONW_SEND
     }
-    async sendTo(ID: string, content: string | Buffer, options: any) {
+    /**
+     * 发送
+     * @param ID 
+     * @param content 
+     * @param options 
+     */
+    async sendTo(ID: string, content: string | Buffer, options?: any) {
         throw ServerError.UNKONW_SEND
     }
+    /**
+     * 消息
+     * @param data 
+     * @param options 
+     */
     async message(data: any, options: {
         ID: string,
         [index: string]: any
@@ -72,6 +90,13 @@ export class RPCServer {
                 case RPCType.Request:
                     try {
                         rpc.Data = await this.controller(rpc.Path, rpc.Data, rpc, options)
+
+                    } catch (e) {
+                        rpc.Data = { m: e.message }
+                        if (this.debug) {
+                            rpc.Data['e'] = e.stack
+                        }
+                    } finally {
                         if (rpc.NeedReply) {
                             rpc.Type = RPCType.Response
                             rpc.To = rpc.From;
@@ -79,28 +104,20 @@ export class RPCServer {
                             rpc.NeedReply = false;
                             this.send(rpc.encode(), options)
                         }
-                    } catch (e) {
-                        rpc.Data = { m: e.message }
-                        if (this.debug) {
-                            rpc.Data['e'] = e.stack
-                        }
-                        rpc.Type = RPCType.Response
-                        rpc.To = rpc.From;
-                        rpc.From = ''
-                        rpc.NeedReply = false;
-                        this.send(rpc.encode(), options)
-                    } finally {
                     }
                     break;
                 case RPCType.Proxy:
                     break;
                 case RPCType.Response:
-                    this.resolve(rpc.ID, rpc.Data)
+                    if (rpc.Status)
+                        this.resolve(rpc.ID, rpc.Data)
+                    else
+                        this.reject(rpc.ID, rpc.Data)
                     break;
                 case RPCType.Login:
                     rpc.Data = true
                     rpc.Type = RPCType.Response
-                    if (this.clients[rpc.From] || rpc.From.replace(/0/g, '').length == 0) {
+                    if (this.clients[rpc.From]) {
                         rpc.Status = false;
                         rpc.Data = this.genClientAddress()
                     } else {
@@ -110,7 +127,8 @@ export class RPCServer {
                         options.ID = rpc.From;
                         this.clients[rpc.From] = {
                             options,
-                            services: []
+                            services: [],
+                            subscribes: []
                         };
                     }
                     rpc.To = rpc.From
@@ -130,33 +148,110 @@ export class RPCServer {
                         let i = this.clients[rpc.ID].services.indexOf(rpc.Path)
                         if (i > -1) { this.clients[rpc.ID].services.splice(i, 1) }
                     }
-                    rpc.From = ''
                     rpc.To = rpc.From
+                    rpc.From = ''
                     rpc.Type = RPCType.Response
                     this.send(rpc.encode(), options)
                     break;
+                case RPCType.Pub:
+                    //发布
+                    let pubs: string[] = [];
+                    console.log(`From:${rpc.From},ID:${rpc.ID},Data:${rpc.Data}`)
+                    Object.keys(this.subscribes).forEach((topic: string) => {
+                        if (new RegExp(topic).test(rpc.Path)) {
+                            this.subscribes[topic].forEach((id: string) => {
+                                rpc.To = id;
+                                try {
+                                    this.sendTo(id, rpc.encode(), options)
+                                    pubs.push(id)
+                                    console.log(`To:${rpc.To},ID:${rpc.ID},Data:${rpc.Data}`)
+                                } catch (error) {
+
+                                }
+                            })
+                        }
+                    })
+                    rpc.To = rpc.From
+                    rpc.Data = pubs.length > 100 ? pubs.length : pubs;
+                    rpc.Type = RPCType.Response
+                    this.send(rpc.encode(), options)
+                    break;
+                case RPCType.Sub:
+                    //订阅
+                    try {
+                        if ('string' == typeof rpc.Data) {
+                            let topic = checkTopic(rpc.Data)
+                            this.handleSubscribe(rpc.From, topic)
+                        } else if (rpc.Data instanceof Array) {
+                            rpc.Data.forEach((topic: string) => {
+                                topic = checkTopic(topic)
+                                this.handleSubscribe(rpc.From, topic)
+                            })
+                        } else {
+                            rpc.Status = false;
+                            rpc.Data = 'ErrorTopic'
+                        }
+                    } catch (error) {
+                        rpc.Status = false;
+                        rpc.Data = 'ErrorTopic'
+                    } finally {
+                        rpc.To = rpc.From
+                        rpc.Type = RPCType.Response
+                        this.send(rpc.encode(), options)
+                    }
+
+                    break;
+                case RPCType.UnSub:
+                    //取消订阅
+                    try {
+                        if ('string' == typeof rpc.Data) {
+                            let topic = checkTopic(rpc.Data)
+                            if (!this.subscribes[topic]) { this.subscribes[topic] = [] }
+                            let i = this.subscribes[topic].indexOf(rpc.From)
+                            if (i > -1) { this.subscribes[topic].splice(i, 1) }
+                        } else if (rpc.Data instanceof Array) {
+                            rpc.Data.forEach((topic: string) => {
+                                topic = checkTopic(topic)
+                                this.handleSubscribe(rpc.From, topic)
+                            })
+                        } else {
+                            rpc.Status = false;
+                            rpc.Data = 'ErrorTopic'
+                        }
+                    } catch (error) {
+                        rpc.Status = false;
+                        rpc.Data = 'ErrorTopic'
+                    } finally {
+                        if (rpc.Status) { rpc.Data = '' }
+                        rpc.Type = RPCType.Response
+                        this.send(rpc.encode(), options)
+                    }
+                    break;
+
             }
         } catch (error) {
-
+            if (rpc.NeedReply) {
+                rpc.Status = false;
+                rpc.Data = error.message
+                rpc.To = rpc.From;
+                rpc.From = ''
+                this.send(rpc.encode(), options)
+            }
+        }
+    }
+    protected handleSubscribe(ID: string, topic: string) {
+        if (!this.subscribes[topic]) { this.subscribes[topic] = [] }
+        if (this.subscribes[topic].indexOf(ID) == -1) {
+            this.subscribes[topic].push(ID)
+            this.clients[ID].subscribes.push(topic)
         }
     }
     protected genClientAddress() {
-        let r = "";
-        let o = ++this.ClientAddress
         while (true) {
-            r += o % codeLen
-            if (o > codeLen) {
-                o = Math.floor(o / codeLen)
-            } else {
-                if (this.clients[r]) {
-                    o = ++this.ClientAddress
-                    if (max < o) {
-                        this.ClientAddress = 0
-                        o = 0;
-                    }
-                } else
-                    return r;
-            }
+            if (this.clients[base_covert(10, 62, this.ClientAddress)]) {
+                this.ClientAddress++
+                if (this.ClientAddress > max) { this.ClientAddress = 0 }
+            } else { return base_covert(10, 62, this.ClientAddress) }
         }
     }
     async push(to: string, path: string, data: any) {
@@ -179,6 +274,12 @@ export class RPCServer {
             this.clients[ctx.ID].services.forEach((e: string) => {
                 if (this.services[e][ctx.ID]) {
                     delete this.services[e][ctx.ID]
+                }
+            })
+            this.clients[ctx.ID].subscribes.forEach((e: string) => {
+                let i = this.subscribes[e].indexOf(ctx.ID);
+                if (i > -1) {
+                    this.subscribes[e].splice(i, 1)
                 }
             })
             delete this.clients[ctx.ID]
