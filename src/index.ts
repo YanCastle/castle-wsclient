@@ -26,6 +26,7 @@ export default class RPCClient {
     protected _ws: WebSocket | any;
     protected _times: number = 0;
     protected _wsurl: string = "";
+    protected _wsurls: string[] = []
     protected _id: number = 0;
     protected _promise: { [index: number]: { resolve: Function, reject: Function } } = {}
     //客户识别号
@@ -41,8 +42,14 @@ export default class RPCClient {
      * @param wsurl 
      * @param address 
      */
-    constructor(wsurl: string, address: string = "", wsInstance: WebSocket | any = undefined) {
-        this._wsurl = wsurl;
+    constructor(wsurl: string | string[], address: string = "", wsInstance: WebSocket | any = undefined) {
+        if (wsurl instanceof Array) {
+            this._wsurl = wsurl[0]
+            this._wsurls = wsurl;
+        } else {
+            this._wsurl = wsurl;
+            this._wsurls = [wsurl]
+        }
         this._address = address;
         if (wsInstance) {
             this._wsInstance = wsInstance
@@ -262,79 +269,87 @@ export default class RPCClient {
             }
         }
         if (rpc === undefined) { return; }
-        if (rpc.Type == RPCType.Response) {
-            if (rpc.Status) {
-                this.resolve(rpc.ID, rpc.Data)
-            }
-            else {
-                this.reject(rpc.ID, rpc.Data)
-            }
-        } else if (RPCType.Request == rpc.Type) {
-            //请求供应的服务
-            if (this._services[rpc.Path]) {
-                this._services[rpc.Path](rpc.Data).then((rs: any) => {
-                    if (rpc.NeedReply) {
-                        rpc.Type = RPCType.Response
-                        rpc.To = rpc.From
-                        rpc.From = this._address
-                        rpc.Time = Date.now()
-                        rpc.Data = rs;
-                        rpc.Status = true;
-                        this.send(rpc)
-                    }
-                }).catch((e: any) => {
-                    if (rpc.NeedReply) {
-                        rpc.Type = RPCType.Response
-                        rpc.To = rpc.From
-                        rpc.From = this._address
-                        rpc.Time = Date.now()
-                        rpc.Data = e;
-                        rpc.Status = false;
-                        this.send(rpc)
-                    }
-                })
-            } else {
-                if (rpc.NeedReply) {
-                    rpc.Type = RPCType.Response
-                    rpc.To = rpc.From
-                    rpc.From = this._address
-                    rpc.Time = Date.now()
-                    rpc.Data = 'NoService';
-                    rpc.Status = false;
-                    this.send(rpc)
+        switch (rpc.Type) {
+            case RPCType.Response:
+                if (rpc.Status) {
+                    this.resolve(rpc.ID, rpc.Data)
                 }
-            }
-        } else if (RPCType.Push == rpc.Type) {
-            //推送消息
-            this.dispatch(WSClientEvent.Push, rpc)
-            if (this._push[rpc.Path]) {
-                this._push[rpc.Path](rpc.Data).then((rs: any) => {
+                else {
+                    this.reject(rpc.ID, rpc.Data)
+                }
+                break;
+            case RPCType.Request:
+                //请求供应的服务
+                if (this._services[rpc.Path]) {
+                    this._services[rpc.Path](rpc.Data).then((rs: any) => {
+                        if (rpc.NeedReply) {
+                            rpc.Type = RPCType.Response
+                            rpc.To = rpc.From
+                            rpc.From = this._address
+                            rpc.Time = Date.now()
+                            rpc.Data = rs;
+                            rpc.Status = true;
+                            this.send(rpc)
+                        }
+                    }).catch((e: any) => {
+                        if (rpc.NeedReply) {
+                            rpc.Type = RPCType.Response
+                            rpc.To = rpc.From
+                            rpc.From = this._address
+                            rpc.Time = Date.now()
+                            rpc.Data = e;
+                            rpc.Status = false;
+                            this.send(rpc)
+                        }
+                    })
+                } else {
                     if (rpc.NeedReply) {
                         rpc.Type = RPCType.Response
                         rpc.To = rpc.From
                         rpc.From = this._address
                         rpc.Time = Date.now()
-                        rpc.Data = rs;
-                        rpc.Status = true;
-                        this.send(rs)
-                    }
-                }).catch((e: any) => {
-                    if (rpc.NeedReply) {
-                        rpc.Type = RPCType.Response
-                        rpc.To = rpc.From
-                        rpc.From = this._address
-                        rpc.Time = Date.now()
-                        rpc.Data = e;
+                        rpc.Data = 'NoService';
                         rpc.Status = false;
                         this.send(rpc)
                     }
-                })
-            }
-        } else if (RPCType.Move == rpc.Type) {
-            //切换服务器地址
-            this.dispatch(WSClientEvent.Move, rpc)
-            this._wsurl = rpc.Data.toString()
-            this.createws()
+                }
+                break;
+            case RPCType.Push:
+                //推送消息
+                this.dispatch(WSClientEvent.Push, rpc)
+                if (this._push[rpc.Path]) {
+                    this._push[rpc.Path](rpc.Data).then((rs: any) => {
+                        if (rpc.NeedReply) {
+                            rpc.Type = RPCType.Response
+                            rpc.To = rpc.From
+                            rpc.From = this._address
+                            rpc.Time = Date.now()
+                            rpc.Data = rs;
+                            rpc.Status = true;
+                            this.send(rs)
+                        }
+                    }).catch((e: any) => {
+                        if (rpc.NeedReply) {
+                            rpc.Type = RPCType.Response
+                            rpc.To = rpc.From
+                            rpc.From = this._address
+                            rpc.Time = Date.now()
+                            rpc.Data = e;
+                            rpc.Status = false;
+                            this.send(rpc)
+                        }
+                    })
+                }
+                break;
+            case RPCType.Move:
+                //切换服务器地址
+                this.dispatch(WSClientEvent.Move, rpc)
+                let i = this._wsurls.indexOf(this._wsurl)
+                if (i > 0) { this._wsurls.splice(i, 1) }
+                this._wsurl = rpc.Data.toString()
+                this._wsurls.push(this._wsurl)
+                this.createws()
+                break;
         }
     }
     /**

@@ -25,6 +25,7 @@ export default class RPCClient {
     protected _ws: WebSocket | any;
     protected _times: number;
     protected _wsurl: string;
+    protected _wsurls: string[];
     protected _id: number;
     protected _promise: {
         [index: number]: {
@@ -42,7 +43,7 @@ export default class RPCClient {
     };
     protected _waiting: RPC[];
     protected interval: any;
-    constructor(wsurl: string, address?: string, wsInstance?: WebSocket | any);
+    constructor(wsurl: string | string[], address?: string, wsInstance?: WebSocket | any);
     protected createws(): void;
     protected login(): any;
     protected onopen(): void;
